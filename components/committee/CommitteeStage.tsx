@@ -834,16 +834,33 @@ function ProjectionBridge({
   const { camera, size, scene } = useThree();
   const point = useRef(new Vector3());
   const cardEdges = useRef({ object: { x: 0, y: 0 }, speaker: { x: 0, y: 0 } });
+  const origin = useRef({ x: 0, y: 0 });
   useLayoutEffect(() => {
     const measure = () => {
       for (const key of ['object', 'speaker'] as const) {
         const box = projection.current[key];
         if (!box?.parentElement) continue;
-        const stage = box.parentElement.getBoundingClientRect();
+        const host = box.closest('.committee-stage');
+        if (!host) continue;
+        const stage = host.getBoundingClientRect();
+        const viewport = host
+          .querySelector('.committee-viewport')
+          ?.getBoundingClientRect();
+        origin.current = {
+          x: (viewport?.left ?? stage.left) - stage.left,
+          y: (viewport?.top ?? stage.top) - stage.top,
+        };
         const card = box.getBoundingClientRect();
+        const docked = getComputedStyle(box).position !== 'absolute';
         cardEdges.current[key] = {
-          x: (key === 'object' ? card.right : card.left) - stage.left,
-          y: card.top - stage.top + Math.min(card.height / 2, 48),
+          x:
+            (docked
+              ? card.left + card.width / 2
+              : key === 'object'
+                ? card.right
+                : card.left) - stage.left,
+          y:
+            card.top - stage.top + (docked ? 0 : Math.min(card.height / 2, 48)),
         };
       }
     };
@@ -854,6 +871,8 @@ function ProjectionBridge({
       if (box) {
         observer.observe(box);
         if (box.parentElement) observer.observe(box.parentElement);
+        const host = box.closest('.committee-stage');
+        if (host) observer.observe(host);
       }
     }
     return () => observer.disconnect();
@@ -874,11 +893,13 @@ function ProjectionBridge({
       );
       if (!box || !path || !anchor) continue;
       anchor.getWorldPosition(point.current).project(camera);
-      const x = ((point.current.x + 1) * size.width) / 2;
-      const y = ((1 - point.current.y) * size.height) / 2;
+      const x = ((point.current.x + 1) * size.width) / 2 + origin.current.x;
+      const y = ((1 - point.current.y) * size.height) / 2 + origin.current.y;
       const { x: bx, y: by } = cardEdges.current[key];
       const visible =
-        layer.visible && y > 0 && y < size.height && x > 0 && x < size.width;
+        layer.visible &&
+        Math.abs(point.current.x) < 1 &&
+        Math.abs(point.current.y) < 1;
       path.style.opacity = visible ? '1' : '0';
       path.setAttribute(
         'd',

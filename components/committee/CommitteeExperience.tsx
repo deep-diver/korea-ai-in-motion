@@ -1,5 +1,6 @@
 'use client';
 /* eslint-disable next/no-img-element -- Credited local profile photographs. */
+/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- The horizontal timeline is a keyboard-scrollable region. */
 import {
   useCallback,
   useEffect,
@@ -45,6 +46,7 @@ import portraits from '@/data/committee/portraits.json';
 import type { Clock, Projection } from './CommitteeStage';
 import { SCENE_DURATION as DURATION, navigationStart } from './motion';
 import './committee.css';
+import './mobile.css';
 import SpeakerCard from './SpeakerCard';
 import SourceOverlay from './SourceOverlay';
 import { sceneCast } from './sceneDesign';
@@ -112,7 +114,7 @@ function CommitteeFilm({
   });
   const tween = useRef<gsap.core.Tween | null>(null),
     state = useRef({ index, playing, speed, reduced }),
-    rail = useRef<HTMLDivElement>(null);
+    rail = useRef<HTMLElement>(null);
   const onReady = useCallback(() => setReady(true), []);
   const visible = usePageVisibility();
   const scene = scenes[index],
@@ -429,17 +431,32 @@ function CommitteeFilm({
             <span className="committee-auto-indicator" /> 근거 자동 표시{' '}
             {autoSources ? '켜짐' : '꺼짐'}
           </button>
-          {autoSources && (
-            <SourceOverlay
-              key={`${scene.id}:${replay}`}
-              scene={scene}
-              progress={displayProgress}
-              speed={speed}
-              reduced={reduced}
-              onHold={setEvidenceHeld}
-              onOpen={() => setDialog('sources')}
-            />
-          )}
+          <div className="committee-source-slot" data-enabled={autoSources}>
+            <div className="committee-source-preview">
+              <span>
+                <BookOpen size={16} /> 이 장면의 근거
+              </span>
+              <p>
+                {sources[scene.sources[0]].publisher} ·{' '}
+                {date(sources[scene.sources[0]].published)}
+              </p>
+              <h3>{sources[scene.sources[0]].title}</h3>
+              <button onClick={() => setDialog('sources')}>
+                근거 {scene.sources.length}건 살펴보기 <MoveUpRight size={16} />
+              </button>
+            </div>
+            {autoSources && (
+              <SourceOverlay
+                key={`${scene.id}:${replay}`}
+                scene={scene}
+                progress={displayProgress}
+                speed={speed}
+                reduced={reduced}
+                onHold={setEvidenceHeld}
+                onOpen={() => setDialog('sources')}
+              />
+            )}
+          </div>
           <button
             className="committee-details"
             onClick={() => setDialog('sources')}
@@ -451,19 +468,31 @@ function CommitteeFilm({
         <div
           className={`committee-stage${scene.secondarySpeaker ? ' committee-stage-duo' : ''}`}
         >
-          <div className="committee-stage-meta">
-            <span>한 무대, 이어지는 기록</span>
-            <span>
-              {scene.scope === '위원회 활동' ? 'COMMITTEE' : 'POLICY CONTEXT'}
-            </span>
+          <div className="committee-mobile-scene">
+            <div>
+              <span>{axis.name}</span>
+              <small>
+                {String(index + 1).padStart(2, '0')} / {scenes.length}
+              </small>
+            </div>
+            <time dateTime={scene.date}>{date(scene.date)}</time>
+            <h2>{scene.title}</h2>
           </div>
-          <Stage
-            onReady={onReady}
-            scene={scene}
-            previous={previous === null ? null : scenes[previous]}
-            clock={clock}
-            projection={projection}
-          />
+          <div className="committee-viewport scene-view">
+            <div className="committee-stage-meta">
+              <span>한 무대, 이어지는 기록</span>
+              <span>
+                {scene.scope === '위원회 활동' ? 'COMMITTEE' : 'POLICY CONTEXT'}
+              </span>
+            </div>
+            <Stage
+              onReady={onReady}
+              scene={scene}
+              previous={previous === null ? null : scenes[previous]}
+              clock={clock}
+              projection={projection}
+            />
+          </div>
           <svg className="committee-leaders" aria-hidden="true">
             <path
               ref={(el) => {
@@ -476,33 +505,35 @@ function CommitteeFilm({
               }}
             />
           </svg>
-          <div
-            className={
-              scene.secondarySpeaker
-                ? 'committee-speaker committee-speaker-secondary'
-                : 'committee-object'
-            }
-            ref={(el) => {
-              projection.current.object = el;
-            }}
-          >
-            {scene.secondarySpeaker ? (
-              <SpeakerCard speaker={cast[0]} />
-            ) : (
-              <>
-                <span className="committee-dot" />
-                <strong>{scene.object.title}</strong>
-                <p>{scene.object.text}</p>
-              </>
-            )}
-          </div>
-          <div
-            className="committee-speaker"
-            ref={(el) => {
-              projection.current.speaker = el;
-            }}
-          >
-            <SpeakerCard speaker={scene.speaker} />
+          <div className="committee-callouts">
+            <div
+              className={
+                scene.secondarySpeaker
+                  ? 'committee-speaker committee-speaker-secondary'
+                  : 'committee-object'
+              }
+              ref={(el) => {
+                projection.current.object = el;
+              }}
+            >
+              {scene.secondarySpeaker ? (
+                <SpeakerCard speaker={cast[0]} />
+              ) : (
+                <>
+                  <span className="committee-dot" />
+                  <strong>{scene.object.title}</strong>
+                  <p>{scene.object.text}</p>
+                </>
+              )}
+            </div>
+            <div
+              className="committee-speaker"
+              ref={(el) => {
+                projection.current.speaker = el;
+              }}
+            >
+              <SpeakerCard speaker={scene.speaker} />
+            </div>
           </div>
         </div>
       </section>
@@ -568,8 +599,9 @@ function CommitteeFilm({
           <span>{Math.round(displayProgress * 24)}초 / 24초</span>
         </div>
         <label className="committee-speed">
-          재생 속도
+          <span>재생 속도</span>
           <select
+            aria-label="재생 속도"
             value={speed}
             onChange={(e) => setSpeed(Number(e.target.value))}
           >
@@ -602,7 +634,13 @@ function CommitteeFilm({
             </span>
           ))}
         </div>
-        <div className="committee-rail" ref={rail}>
+        <section
+          className="committee-rail"
+          ref={rail}
+          tabIndex={0}
+          data-annotation-scroll="true"
+          aria-label="사건 목록 · 좌우로 스크롤"
+        >
           <div
             className="committee-track-grid"
             style={{ width: scenes.length * 156 }}
@@ -632,7 +670,7 @@ function CommitteeFilm({
               </div>
             ))}
           </div>
-        </div>
+        </section>
       </section>
       <footer className="committee-footer">
         <span>{scenes.length}개 장면 · 3개의 축 · 공개 자료 기반</span>
