@@ -90,6 +90,30 @@ void test('a citation links the actual scene source, holds on keyboard focus, an
     host.querySelector('section'),
     'a different scene gets its own citation',
   );
+  const section = host.querySelector('section')!;
+  const pointer = (type: string, pointerType: string) => {
+    const event = new dom.window.MouseEvent(type, { bubbles: true });
+    Object.defineProperty(event, 'pointerType', { value: pointerType });
+    section.dispatchEvent(event);
+  };
+  await act(async () => pointer('pointerover', 'touch'));
+  assert.equal(held, false, 'touch entry must not leave a sticky hover pause');
+  await act(async () => pointer('pointerover', 'mouse'));
+  assert.equal(held, true, 'desktop mouse hover still pauses the source');
+  await act(async () => pointer('pointerout', 'mouse'));
+  assert.equal(held, false);
+  const reading = host.querySelector<HTMLButtonElement>('[data-read-toggle]')!;
+  await act(async () => reading.focus());
+  assert.equal(held, false, 'focusing the reading toggle does not trap resume');
+  await act(async () => reading.click());
+  assert.equal(held, true);
+  assert.equal(reading.getAttribute('aria-pressed'), 'true');
+  await act(async () => reading.click());
+  assert.equal(
+    held,
+    false,
+    'resume works while keyboard focus stays on toggle',
+  );
   await act(async () => root.unmount());
   assert.equal(held, false);
   dom.window.close();

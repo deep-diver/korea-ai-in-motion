@@ -23,13 +23,14 @@ export default function SourceOverlay({
   const [dismissed, setDismissed] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [reading, setReading] = useState(false);
   const window = evidenceWindow(progress, speed, reduced);
   const visible = window.visible && !dismissed;
   const source = sources[scene.sources[0]];
   useEffect(() => {
-    onHold(visible && (hovered || focused));
+    onHold(visible && (hovered || focused || reading));
     return () => onHold(false);
-  }, [visible, hovered, focused, onHold]);
+  }, [visible, hovered, focused, reading, onHold]);
   if (!visible) return null;
   return (
     <section
@@ -39,9 +40,13 @@ export default function SourceOverlay({
         opacity: window.opacity,
         transform: `translateY(${(1 - window.opacity) * 12}px)`,
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setFocused(true)}
+      onPointerEnter={(event) => {
+        if (event.pointerType === 'mouse') setHovered(true);
+      }}
+      onPointerLeave={() => setHovered(false)}
+      onFocus={(event) =>
+        setFocused(!event.target.closest('[data-read-toggle]'))
+      }
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget))
           setFocused(false);
@@ -71,8 +76,16 @@ export default function SourceOverlay({
           근거 {scene.sources.length}건 모두 보기
         </button>
       </div>
+      <button
+        className="committee-mobile-read"
+        data-read-toggle
+        aria-pressed={reading}
+        onClick={() => setReading((value) => !value)}
+      >
+        {reading ? '장면 재생 계속' : '읽는 동안 멈추기'}
+      </button>
       <p className="committee-source-overlay-hint">
-        {hovered || focused
+        {hovered || focused || reading
           ? '읽는 동안 재생을 잠시 멈췄어요'
           : '잠시 뒤 장면으로 돌아갑니다'}
       </p>

@@ -60,19 +60,33 @@ const Stage = dynamic(() => import('./CommitteeStage'), {
 const date = (v: string) => v.replaceAll('-', '.');
 export default function CommitteeExperience() {
   const [division, setDivision] = useState<DivisionSelection>('all');
+  const [speed, setSpeed] = useState(2);
+  const [playing, setPlaying] = useState(true);
   const restoreFocus = useRef(false);
   useLayoutEffect(() => {
-    if (restoreFocus.current)
-      document
-        .querySelector<HTMLButtonElement>(
-          '.committee-division-choices button[aria-pressed="true"]',
-        )
-        ?.focus({ preventScroll: true });
+    if (!restoreFocus.current) return;
+    const selected = document.querySelector<HTMLButtonElement>(
+      '.committee-division-choices button[aria-pressed="true"]',
+    );
+    selected?.focus({ preventScroll: true });
+    const choices = selected?.parentElement;
+    if (selected && choices && choices.scrollWidth > choices.clientWidth)
+      choices.scrollTo({
+        left:
+          selected.offsetLeft -
+          choices.offsetLeft -
+          (choices.clientWidth - selected.offsetWidth) / 2,
+        behavior: 'instant',
+      });
   }, [division]);
   return (
     <CommitteeFilm
       key={division}
       division={division}
+      speed={speed}
+      setSpeed={setSpeed}
+      playing={playing}
+      setPlaying={setPlaying}
       onDivisionChange={(value) => {
         restoreFocus.current = true;
         setDivision(value);
@@ -83,7 +97,15 @@ export default function CommitteeExperience() {
 function CommitteeFilm({
   division,
   onDivisionChange,
+  speed,
+  setSpeed,
+  playing,
+  setPlaying,
 }: {
+  speed: number;
+  setSpeed: (speed: number) => void;
+  playing: boolean;
+  setPlaying: (playing: SetStateAction<boolean>) => void;
   division: DivisionSelection;
   onDivisionChange: (division: DivisionSelection) => void;
 }) {
@@ -94,9 +116,9 @@ function CommitteeFilm({
     : null;
   const [index, setIndex] = useState(0),
     [previous, setPrevious] = useState<number | null>(null),
-    [playing, setPlaying] = useState(true),
-    [speed, setSpeed] = useState(2),
-    [progress, setProgress] = useState(0),
+    [progress, setProgress] = useState(
+      () => navigationStart(playing, false) / DURATION,
+    ),
     [replay, setReplay] = useState(0),
     [reduced, setReduced] = useState(false),
     [dialog, setDialog] = useState<'sources' | 'archive' | null>(null),
@@ -104,7 +126,7 @@ function CommitteeFilm({
     [ready, setReady] = useState(false),
     [autoSources, setAutoSources] = useState(true),
     [evidenceHeld, setEvidenceHeld] = useState(false);
-  const startTime = useRef(0);
+  const startTime = useRef(navigationStart(playing, false));
   const clock = useRef<Clock>({ time: 0, previousTime: 0, reduced: false });
   const projection: Projection = useRef({
     object: null,
@@ -174,7 +196,7 @@ function CommitteeFilm({
     return () => {
       t.kill();
     };
-  }, [index, replay, go, scenes.length]);
+  }, [index, replay, go, scenes.length, setPlaying]);
   useEffect(() => {
     const t = tween.current;
     if (!t) return;
@@ -206,7 +228,7 @@ function CommitteeFilm({
     change();
     media.addEventListener('change', change);
     return () => media.removeEventListener('change', change);
-  }, []);
+  }, [setPlaying]);
   const toggle = useCallback(() => {
     if (state.current.reduced) return;
     if (clock.current.time >= DURATION) {
@@ -372,7 +394,11 @@ function CommitteeFilm({
           읽는 정책입니다. 수록 장면 수는 전체 회의 횟수나 성과 순위가 아닙니다.
         </p>
       )}
-      <section className="committee-theater" aria-label="위원회 여정 재생">
+      <section
+        id="committee-theater"
+        className="committee-theater"
+        aria-label="위원회 여정 재생"
+      >
         <aside className="committee-story" key={scene.id}>
           <div className="committee-story-top">
             <span>{AXES[scene.axis].name}</span>
@@ -441,6 +467,16 @@ function CommitteeFilm({
                 {date(sources[scene.sources[0]].published)}
               </p>
               <h3>{sources[scene.sources[0]].title}</h3>
+              <small>
+                {sources[scene.sources[0]].kind} · 근거 {scene.sources.length}건
+              </small>
+              <a
+                href={sources[scene.sources[0]].url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                원문 읽기 <ArrowUpRight size={15} />
+              </a>
               <button onClick={() => setDialog('sources')}>
                 근거 {scene.sources.length}건 살펴보기 <MoveUpRight size={16} />
               </button>
@@ -493,6 +529,22 @@ function CommitteeFilm({
               projection={projection}
             />
           </div>
+          <div className="committee-mobile-caption">
+            <span>
+              장면 해설 <small>무대를 좌우로 밀어 넘기기</small>
+            </span>
+            <div className="committee-caption-stack">
+              {scene.beats.map((text, i) => (
+                <p
+                  key={text}
+                  style={{ opacity: captionWeight(displayProgress, i) }}
+                  aria-hidden={i !== beat}
+                >
+                  {text}
+                </p>
+              ))}
+            </div>
+          </div>
           <svg className="committee-leaders" aria-hidden="true">
             <path
               ref={(el) => {
@@ -538,6 +590,15 @@ function CommitteeFilm({
         </div>
       </section>
       <section className="committee-player" aria-label="재생 조작">
+        <div className="committee-mobile-position">
+          <span>
+            <b>{String(index + 1).padStart(2, '0')}</b> / {scenes.length}{' '}
+            <i>·</i> {scene.short}
+          </span>
+          <a href="#committee-theater" aria-label="현재 무대로 돌아가기">
+            무대 <MoveUpRight size={14} />
+          </a>
+        </div>
         <div className="committee-play-buttons">
           <button
             onClick={() => go(index - 1)}
@@ -660,6 +721,7 @@ function CommitteeFilm({
                         }
                         onClick={() => go(i)}
                         aria-current={i === index ? 'step' : undefined}
+                        aria-label={`${date(s.date)} · ${s.title}`}
                       >
                         <small>{s.date.slice(2).replaceAll('-', '.')}</small>
                         <span>{s.short}</span>
