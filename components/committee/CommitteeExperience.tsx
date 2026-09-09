@@ -93,7 +93,7 @@ function CommitteeFilm({
   const [index, setIndex] = useState(0),
     [previous, setPrevious] = useState<number | null>(null),
     [playing, setPlaying] = useState(true),
-    [speed, setSpeed] = useState(1),
+    [speed, setSpeed] = useState(2),
     [progress, setProgress] = useState(0),
     [replay, setReplay] = useState(0),
     [reduced, setReduced] = useState(false),
